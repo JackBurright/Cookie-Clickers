@@ -2,13 +2,48 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait 
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import InvalidCookieDomainException
+
 import time
 import re
+import pickle
 
-driver = webdriver.Chrome()
+
+chrome_options = webdriver.ChromeOptions()
+prefs = {
+    "download.default_directory": "/saveFile",
+    "directory_upgrade": True,
+    "safebrowsing.enabled": True
+}
+chrome_options.add_experimental_option("prefs", prefs)
+
+driver = webdriver.Chrome(options=chrome_options)
 wait2 = WebDriverWait(driver, 2)
 wait10 = WebDriverWait(driver, 10)
 
+
+
+def saveCookies(file):
+    cookies = driver.get_cookies()
+    with open(file, 'wb') as file:
+        pickle.dump(cookies, file)
+    return
+
+def loadCookies(file):
+    current_url = driver.current_url
+    current_domain = current_url.split('/')[2]
+    with open(file, 'rb') as file:
+        cookies = pickle.load(file)
+        for cookie in cookies:
+            if cookie['domain'] == current_domain or cookie['domain'].startswith('.'):
+                try:
+                    # Add each cookie to the WebDriver session
+                    driver.add_cookie(cookie)
+                except InvalidCookieDomainException as ex:
+                    print(f"Ignoring cookie '{cookie}' due to InvalidCookieDomainException: {str(ex)}")
+                    continue
+    driver.refresh()
+    return
 
 def clickCookie(num):
     cookie_to_click = wait10.until(EC.element_to_be_clickable((By.ID, 'bigCookie')))
@@ -59,18 +94,31 @@ def buyUpgrade():
         return True
     return False
 
-
-driver.get('https://orteil.dashnet.org/cookieclicker/')
-time.sleep(1)
-if not clickLanguage():
-    time.sleep(3)
+def startGame():
+    driver.get('https://orteil.dashnet.org/cookieclicker/')
     if not clickLanguage():
-        raise AssertionError
+        time.sleep(3)
+        if not clickLanguage():
+            raise AssertionError
 
-time.sleep(1)
-clickCookie(30)
+    time.sleep(1)
+    clickCookie(30)
+    buyCursor(1)
+    return
 
 
+def downloadSaveFile():
+    optionTab = wait2.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#prefsButton > div')))
+    optionTab.click()
+    time.sleep(10)
+    saveGame = wait2.until(EC.element_to_be_clickable((By.CSS_SELECTOR, 'div > div > div:nth-child(5) > a:nth-child(1)')))
+    saveGame.click()
+    return
 
+
+startGame()
 time.sleep(5)
+downloadSaveFile()
+
+time.sleep(520)
 driver.quit()
